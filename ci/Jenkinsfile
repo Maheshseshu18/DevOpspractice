@@ -1,0 +1,51 @@
+pipeline {
+  agent any
+  environment {
+    DOCKER_IMAGE = "myorg/myapp"
+    REGISTRY_CRED = credentials('docker-registry-cred') // configure in Jenkins
+  }
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+    stage('Build') {
+      steps {
+        script {
+          if (fileExists('pom.xml')) {
+            sh 'mvn -B -DskipTests clean package'
+          } else if (fileExists('package.json')) {
+            sh 'npm ci && npm run build'
+          } else {
+            echo 'No known build tool found; skipping build stage.'
+          }
+        }
+      }
+    }
+    stage('Docker Build & Push') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: "${REGISTRY_CRED}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+          sh '''
+            HASH=$(git rev-parse --short HEAD)
+            STAMP=$(date +%Y%m%d_%H%M%S)
+            TAG=${DOCKER_IMAGE}:${STAMP}-$HASH
+            docker build -t $TAG .
+            echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+            docker push $TAG
+            echo "PUSHED $TAG"
+          '''
+        }
+      }
+    }
+    stage('Deploy (canary)') {
+      steps {
+        input message: 'Proceed with canary deploy?'
+        sh 'kubectl set image deploy/myapp myapp=${DOCKER_IMAGE}:${STAMP}-$HASH || true'
+      }
+    }
+  }
+  post {
+    failure {
+      mail to: 'ops@example.com', subject: "Build failed: ${env.JOB_NAME}", body: "See Jenkins console output"
+    }
+  }
+}
