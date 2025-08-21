@@ -1,0 +1,10 @@
+
+[Unit]
+Description=Run disk_alert daily
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target

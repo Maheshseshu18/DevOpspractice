@@ -1,0 +1,12 @@
+
+[Unit]
+Description=Service Guard Monitor
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/service_guard.sh nginx docker sshd
+Restart=always
+EnvironmentFile=/etc/default/service_guard.env
+
+[Install]
+WantedBy=multi-user.target
